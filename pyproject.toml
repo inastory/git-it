@@ -8,6 +8,5 @@ dependencies = [
     "inquirer>=3.4.1",
 ]
 
-
 [project.scripts]
-gitmoji = "src.gitmoji:main"
+gitmoji = "gitmoji.main:main"
