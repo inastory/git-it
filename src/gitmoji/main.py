@@ -38,14 +38,26 @@ for display_text, icon in RAW_GITMOJIS:
 
     GITMOJIS.append((display_text, icon))
 
+
 def run_command(cmd):
     """執行系統指令並回傳結果"""
     try:
+        # 💡 關鍵修正：加入了 encoding="utf-8" 和 errors="ignore"
+        # 強迫 Windows Python 用萬國碼讀取 Git 的回傳，並忽略無法解析的雜訊
         result = subprocess.run(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            check=True
+        )
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
-        error_msg = e.stderr.strip() if e.stderr.strip() else e.stdout.strip()
+        # 這裡的錯誤訊息讀取也同步補上安全處理
+        error_msg = e.stderr.strip() if e.stderr else (
+            e.stdout.strip() if e.stdout else "未知錯誤")
         print(f"❌ 執行失敗: {error_msg}")
         sys.exit(1)
 
