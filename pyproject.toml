@@ -1,7 +1,7 @@
 [project]
-name = "github-submit-tool"
-version = "0.1.0"
-description = "Add your description here"
+name = "git_it"
+version = "1.0.0"
+description = "An interactive, emoji-guided workflow for GitHub submissions"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -9,4 +9,4 @@ dependencies = [
 ]
 
 [project.scripts]
-gitmoji = "gitmoji.main:main"
+gitit = "git_it.main:main"
