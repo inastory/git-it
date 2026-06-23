@@ -1,0 +1,13 @@
+[project]
+name = "github-submit-tool"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "inquirer>=3.4.1",
+]
+
+
+[project.scripts]
+gitmoji = "src.gitmoji:main"
