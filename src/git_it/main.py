@@ -118,115 +118,69 @@ def check_unpushed_commits():
         # 如果沒有設定遠端追蹤分支（例如全新的專案），直接當作沒有未推送的
         return []
 
-def main():
-    if sys.platform == "win32" and not IS_VSCODE:
-        os.system("chcp 65001 > nul")
+# -------------------------------------------------------------
+# 🧩 步驟積木 (Step Functions)
+# -------------------------------------------------------------
 
-    print("🐙 [InaStory-Gitmoji] 歡迎使用互動式提交工具 desu Wah! \n")
-    sys.stdout.flush()
-
-    # 🟢 步驟一：檢查並選擇要 git add 的檔案
-    changed_files = get_changed_files()
-
-    # 🚨 關鍵改變：如果工作區「很乾淨」，我們不直接結束，而是啟動未推送雷達！
-    if not changed_files:
-        unpushed = check_unpushed_commits()
-
-        if unpushed:
-            print("💡 目前工作區很乾淨，但偵測到本地有尚未推送到 GitHub 的提交：")
-            for commit in unpushed:
-                print(f"   ✨ {commit}")
-            print()  # 空一行
-
-            # 清單式選項
-            push_question = [
-                inquirer.List(
-                    'push_action',
-                    message="請選擇下一步操作",
-                    choices=[
-                        ("🚀 立即推送到 GitHub (git push)", "push"),
-                        ("👋 暫不推送，結束離開", "exit")
-                    ],
-                    default="push"
-                )
-            ]
-
-            answers = inquirer.prompt(push_question)
-
-            if answers and answers.get('push_action') == "push":
-                print("\n📡 正在推送到 GitHub，請稍候...")
-                sys.stdout.flush()
-                push_result = run_command(["git", "push"])
-                if push_result:
-                    print(f"\n📦 Git 回傳:\n{push_result}")
-                print("\n🚀 雲端同步成功！程式碼已安全送達 GitHub desu Wah! 🐙✨")
-            else:
-                print("\n👋 好的，已取消推送。有需要隨時再叫我 desu！")
-        else:
-            # 真的全空，什麼都沒有
-            print("✅ 目前沒有任何檔案需要提交，且所有進度皆已同步至 GitHub (工作區完美乾淨)！")
-
-        return  # 乾淨流程在此徹底結束
-
-    # -------------------------------------------------------------
-    # 正常 Commit 流程
-    # -------------------------------------------------------------
-
-    # 建立第一個問題：多選清單 (Checkbox)
+def check_and_stage_files(changed_files):
+    """【步驟一】引導使用者選擇並暫存 (git add) 檔案"""
     add_question = [
         inquirer.Checkbox(
             'files_to_add',
             message="請選擇要暫存 (git add) 的檔案 [按空白鍵勾選，Enter 送出]",
             choices=changed_files,
-            default=[f[1] for f in changed_files]  # 預設幫你全選，省時間！
+            default=[f[1] for f in changed_files]  # 預設全選
         )
     ]
 
     add_answers = inquirer.prompt(add_question)
     if not add_answers or not add_answers['files_to_add']:
         print("👋 未選擇任何檔案，已取消提交。")
-        return
+        return False
 
-    # 執行選中檔案的 git add
     selected_files = add_answers['files_to_add']
     print(f"📥 正在暫存 {len(selected_files)} 個檔案...")
     for f in selected_files:
         run_command(["git", "add", f])
 
     sys.stdout.flush()
+    return True
 
-    # 🔵 步驟二：選擇 Emoji 與輸入 Commit 訊息
+def prompt_commit_message():
+    """【步驟二】引導使用者填寫 Gitmoji 與 Commit 訊息"""
     commit_questions = [
-        inquirer.List(
-            'emoji_pair',
-            message="請選擇這次 Commit 的類型",
-            choices=GITMOJIS,
-        ),
-        inquirer.Text(
-            'message',
-            message="請輸入 Commit 訊息",
-            validate=lambda _, x: len(x.strip()) > 0
-        )
+        inquirer.List('emoji_pair', message="請選擇這次 Commit 的類型", choices=GITMOJIS),
+        inquirer.Text('message', message="請輸入 Commit 訊息", validate=lambda _, x: len(x.strip()) > 0)
     ]
 
-    commit_answers = inquirer.prompt(commit_questions)
-    if not commit_answers:
+    answers = inquirer.prompt(commit_questions)
+    if not answers:
         print("👋 已取消 Commit 提交。")
-        return
+        return None
 
-    # 🟤 步驟三：組合並執行 Commit
-    selected_emoji = commit_answers['emoji_pair']
-    user_msg = commit_answers['message'].strip()
+    return answers
+
+def execute_commit(commit_info):
+    """【步驟三】組合訊息並真正執行本地 Commit"""
+    selected_emoji = commit_info['emoji_pair']
+    user_msg = commit_info['message'].strip()
     final_commit_msg = f"{selected_emoji} {user_msg}"
 
     print(f"\n📝 即將執行: git commit -m \"{final_commit_msg}\"")
     sys.stdout.flush()
 
     run_command(["git", "commit", "-m", final_commit_msg])
-    print("🎉 本地 Commit 成功完成！")
+    print("🎉 本地 Commit 成功完成！\n")
     sys.stdout.flush()
 
-    # 🚀 步驟四：互動式詢問是否立刻 Push 到 GitHub
+def handle_push_workflow(unpushed_commits=None):
+    """【步驟四】處理互動式推送流程 (複用邏輯)"""
+    if unpushed_commits:
+        print("💡 偵測到本地有尚未推送到 GitHub 的提交：")
+        for commit in unpushed_commits:
+            print(f"   ✨ {commit}")
+        print()
+
     push_question = [
         inquirer.List(
             'push_action',
@@ -235,7 +189,7 @@ def main():
                 ("🚀 好的，立刻同步到 GitHub desu!", "push"),
                 ("👋 不用了，先保留在本地電腦就好。", "keep")
             ],
-            default="push"  # 預設停在第一個選項
+            default="push"
         )
     ]
 
@@ -245,16 +199,57 @@ def main():
         print("\n📡 正在推送到 GitHub，請稍候...")
         sys.stdout.flush()
 
-        # 執行 git push
         push_result = run_command(["git", "push"])
-
-        # 把 Git 的成功推送訊息印出來讓使用者安心
         if push_result:
             print(f"\n📦 Git 回傳:\n{push_result}")
 
         print("\n🚀 雲端同步成功！程式碼已安全送達 GitHub desu Wah! 🐙✨")
     else:
         print("\n👋 已將 Commit 保留在本地倉庫，記得找時間 git push 喔！🐙 WAH!")
+
+# -------------------------------------------------------------
+# 🎬 主流程 (Main Orchestrator)
+# -------------------------------------------------------------
+
+def main():
+    if sys.platform == "win32" and not IS_VSCODE:
+        os.system("chcp 65001 > nul")
+
+    print("🐙 [InaStory-Gitmoji] 歡迎使用互動式提交工具 desu Wah! \n")
+    sys.stdout.flush()
+
+    # 獲取工作區異動狀態
+    changed_files = get_changed_files()
+
+    # -------------------------------------------------------------
+    # 情況 A：工作區「很乾淨」，檢查是否有漏掉的 Push
+    # -------------------------------------------------------------
+    if not changed_files:
+        unpushed = check_unpushed_commits()
+        if unpushed:
+            handle_push_workflow(unpushed_commits=unpushed)
+        else:
+            print("✅ 目前沒有任何檔案需要提交，且所有進度皆已同步至 GitHub (工作區完美乾淨)！")
+        return
+
+    # -------------------------------------------------------------
+    # 情況 B：工作區「不乾淨」，按步驟流暢執行
+    # -------------------------------------------------------------
+
+    # 1. 處理檔案暫存，如果中途取消則中斷
+    if not check_and_stage_files(changed_files):
+        return
+
+    # 2. 獲取 Commit 訊息輸入，如果中途取消則中斷
+    commit_info = prompt_commit_message()
+    if not commit_info:
+        return
+
+    # 3. 真正執行 Commit
+    execute_commit(commit_info)
+
+    # 4. 詢問是否推送
+    handle_push_workflow()
 
 if __name__ == "__main__":
     main()
