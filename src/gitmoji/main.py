@@ -143,26 +143,29 @@ def main():
 
     # 🚀 步驟四：互動式詢問是否立刻 Push 到 GitHub
     push_question = [
-        inquirer.Confirm(
-            'confirm_push',
-            message="是否立刻推送到遠端倉庫 (git push)？",
-            default=True  # 預設為 Yes，直接按 Enter 就能 Push！
+        inquirer.List(
+            'push_action',
+                message="是否立刻推送到遠端倉庫 (git push)？",
+                choices=[
+                    ("🚀 好的，立刻同步到 GitHub desu!", "push"),
+                    ("👋 不用了，先保留在本地電腦就好。", "keep")
+                ],
+            default="push"  # 預設停在第一個選項
         )
     ]
 
     push_answer = inquirer.prompt(push_question)
 
-    if push_answer and push_answer['confirm_push']:
+    if push_answer and push_answer['push_action'] == "push":
         print("\n📡 正在推送到 GitHub，請稍候...")
         sys.stdout.flush()
 
         # 執行 git push
-        # 提示：因為你之前第一次提交已經用過 -u origin main 綁定，這裡直接 git push 就會自動認路！
         push_result = run_command(["git", "push"])
 
         # 把 Git 的成功推送訊息印出來讓使用者安心
         if push_result:
-            print(f"📦 Git 回傳:\n{push_result}")
+            print(f"\n📦 Git 回傳:\n{push_result}")
 
         print("\n🚀 雲端同步成功！程式碼已安全送達 GitHub desu Wah! 🐙✨")
     else:
