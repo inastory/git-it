@@ -91,6 +91,33 @@ def get_changed_files():
 
     return files
 
+
+def check_unpushed_commits():
+    """檢查目前分支是否有尚未推送到遠端（GitHub）的本地提交"""
+    try:
+        # 1. 取得目前所在的分支名稱（例如 main 或 master）
+        branch_output = run_command(["git", "branch", "--show-current"])
+        current_branch = branch_output.strip()
+        if not current_branch:
+            return []
+
+        # 2. 比對遠端追蹤分支與本地分支的差異
+        # 例如: origin/main..main
+        upstream = f"origin/{current_branch}"
+        unpushed_output = run_command(
+            ["git", "log", f"{upstream}..{current_branch}", "--oneline"])
+
+        if not unpushed_output or not unpushed_output.strip():
+            return []
+
+        # 3. 將未推送的 commit 整理成陣列回傳
+        commits = [line.strip() for line in unpushed_output.split("\n") if line.strip()]
+        return commits
+
+    except Exception:
+        # 如果沒有設定遠端追蹤分支（例如全新的專案），直接當作沒有未推送的
+        return []
+
 def main():
     if sys.platform == "win32" and not IS_VSCODE:
         os.system("chcp 65001 > nul")
@@ -100,9 +127,50 @@ def main():
 
     # 🟢 步驟一：檢查並選擇要 git add 的檔案
     changed_files = get_changed_files()
+
+    # 🚨 關鍵改變：如果工作區「很乾淨」，我們不直接結束，而是啟動未推送雷達！
     if not changed_files:
-        print("✅ 目前沒有任何檔案需要提交 (Git 工作區很乾淨)！")
-        return
+        unpushed = check_unpushed_commits()
+
+        if unpushed:
+            print("💡 目前工作區很乾淨，但偵測到本地有尚未推送到 GitHub 的提交：")
+            for commit in unpushed:
+                print(f"   ✨ {commit}")
+            print()  # 空一行
+
+            # 清單式選項
+            push_question = [
+                inquirer.List(
+                    'push_action',
+                    message="請選擇下一步操作",
+                    choices=[
+                        ("🚀 立即推送到 GitHub (git push)", "push"),
+                        ("👋 暫不推送，結束離開", "exit")
+                    ],
+                    default="push"
+                )
+            ]
+
+            answers = inquirer.prompt(push_question)
+
+            if answers and answers.get('push_action') == "push":
+                print("\n📡 正在推送到 GitHub，請稍候...")
+                sys.stdout.flush()
+                push_result = run_command(["git", "push"])
+                if push_result:
+                    print(f"\n📦 Git 回傳:\n{push_result}")
+                print("\n🚀 雲端同步成功！程式碼已安全送達 GitHub desu Wah! 🐙✨")
+            else:
+                print("\n👋 好的，已取消推送。有需要隨時再叫我 desu！")
+        else:
+            # 真的全空，什麼都沒有
+            print("✅ 目前沒有任何檔案需要提交，且所有進度皆已同步至 GitHub (工作區完美乾淨)！")
+
+        return  # 乾淨流程在此徹底結束
+
+    # -------------------------------------------------------------
+    # 正常 Commit 流程
+    # -------------------------------------------------------------
 
     # 建立第一個問題：多選清單 (Checkbox)
     add_question = [
@@ -162,11 +230,11 @@ def main():
     push_question = [
         inquirer.List(
             'push_action',
-                message="是否立刻推送到遠端倉庫 (git push)？",
-                choices=[
-                    ("🚀 好的，立刻同步到 GitHub desu!", "push"),
-                    ("👋 不用了，先保留在本地電腦就好。", "keep")
-                ],
+            message="是否立刻推送到遠端倉庫 (git push)？",
+            choices=[
+                ("🚀 好的，立刻同步到 GitHub desu!", "push"),
+                ("👋 不用了，先保留在本地電腦就好。", "keep")
+            ],
             default="push"  # 預設停在第一個選項
         )
     ]
