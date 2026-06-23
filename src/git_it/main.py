@@ -148,12 +148,16 @@ def check_and_stage_files(changed_files):
 
 def prompt_commit_message():
     """【步驟二】引導使用者填寫 Gitmoji 與 Commit 訊息"""
+    sys.stdout.flush()
+
     commit_questions = [
         inquirer.List('emoji_pair', message="請選擇這次 Commit 的類型", choices=GITMOJIS),
         inquirer.Text('message', message="請輸入 Commit 訊息", validate=lambda _, x: len(x.strip()) > 0)
     ]
 
     answers = inquirer.prompt(commit_questions)
+    sys.stdout.flush()
+    
     if not answers:
         print("👋 已取消 Commit 提交。")
         return None
