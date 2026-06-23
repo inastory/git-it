@@ -51,10 +51,12 @@ def run_command(cmd):
         print(f"❌ 執行失敗: {error_msg}")
         sys.exit(1)
 
+
 def get_changed_files():
     """向 Git 索取目前所有異動、未追蹤的檔案清單"""
-    # -s: 簡短模式, --porcelain: 適合腳本解析的穩定格式
-    status_output = run_command(["git", "status", "-s"])
+    # -s: 簡短模式
+    # 💡 重點修正：加上 "-u" 參數，強制 Git 穿透並展開未追蹤資料夾內的所有細部檔案！
+    status_output = run_command(["git", "status", "-s", "-u"])
     if not status_output:
         return []
 
@@ -90,7 +92,6 @@ def get_changed_files():
         files.append((display_name, file_path))
 
     return files
-
 
 def check_unpushed_commits():
     """檢查目前分支是否有尚未推送到遠端（GitHub）的本地提交"""
