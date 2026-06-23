@@ -37,7 +37,6 @@ for display_text, icon in RAW_GITMOJIS:
                 "♻️ refactor:", "♻️  refactor:")
     GITMOJIS.append((display_text, icon))
 
-
 def run_command(cmd):
     """執行系統指令並回傳結果 (支援 UTF-8 保險)"""
     try:
@@ -52,7 +51,6 @@ def run_command(cmd):
         print(f"❌ 執行失敗: {error_msg}")
         sys.exit(1)
 
-
 def get_changed_files():
     """向 Git 索取目前所有異動、未追蹤的檔案清單"""
     # -s: 簡短模式, --porcelain: 適合腳本解析的穩定格式
@@ -60,19 +58,38 @@ def get_changed_files():
     if not status_output:
         return []
 
+    # 💡 完美的「符號 + 中文對照表」：刻意補齊空格讓格式絕對對齊！
+    STATUS_MAP = {
+        "M ": "M  - 暫存",  # 已暫存
+        " M": " M - 修改",  # 未暫存修改
+        "MM": "MM - 雙改",  # 雙重修改
+        "A ": "A  - 新增",  # 已暫存的新檔案
+        "??": "?? - 新檔",  # 未追蹤新檔案
+        "D ": "D  - 刪除",  # 已暫存的刪除
+        " D": " D - 刪除",  # 未暫存的刪除
+        "R ": "R  - 改名",  # 重新命名
+    }
+
     files = []
     for line in status_output.split("\n"):
         if not line.strip():
             continue
-        # Git status 輸出的前兩個字元是狀態碼（例如 M , ?? ），後面是檔名
-        status_code = line[:2].strip()
-        file_path = line[2:].strip().strip('"')  # 移除可能存在的引號
 
-        # 組合美觀的顯示文字：[狀態] 檔案路徑
-        display_name = f"[{status_code}] {file_path}"
+        # 1. 精準擷取前兩個字元的原始狀態碼（不先 strip 才能比對空格）
+        raw_code = line[:2]
+
+        # 2. 擷取後面的檔案路徑並移除可能存在的引號
+        file_path = line[2:].strip().strip('"')
+
+        # 3. 根據對照表轉換成中文，如果遇到冷門符號則保留原始去空格的代碼
+        status_text = STATUS_MAP.get(raw_code, f"{raw_code.strip()} - 異動")
+
+        # 4. 組合極具質感的顯示文字：[M  - 修改] pyproject.toml
+        display_name = f"[{status_text}] {file_path}"
+
         files.append((display_name, file_path))
-    return files
 
+    return files
 
 def main():
     if sys.platform == "win32" and not IS_VSCODE:
@@ -170,7 +187,6 @@ def main():
         print("\n🚀 雲端同步成功！程式碼已安全送達 GitHub desu Wah! 🐙✨")
     else:
         print("\n👋 已將 Commit 保留在本地倉庫，記得找時間 git push 喔！🐙 WAH!")
-
 
 if __name__ == "__main__":
     main()
