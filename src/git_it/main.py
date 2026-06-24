@@ -37,7 +37,6 @@ for display_text, commit_type in RAW_GITMOJIS:
                 "♻️ refactor:", "♻️  refactor:")
     GITMOJIS.append((display_text, commit_type))
 
-
 def run_command(cmd):
     """執行系統指令並回傳結果 (支援 UTF-8 保險)"""
     try:
@@ -45,13 +44,12 @@ def run_command(cmd):
             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, encoding="utf-8", errors="ignore", check=True
         )
-        return result.stdout.strip()
+        return result.stdout.rstrip()
     except subprocess.CalledProcessError as e:
         error_msg = e.stderr.strip() if e.stderr else (
             e.stdout.strip() if e.stdout else "未知錯誤")
         print(f"❌ 執行失敗: {error_msg}")
         sys.exit(1)
-
 
 def get_changed_files():
     """向 Git 索取目前所有異動、未追蹤的檔案清單"""
@@ -80,7 +78,6 @@ def get_changed_files():
         status_text = STATUS_MAP.get(raw_code, f"{raw_code.strip()} - 異動")
         display_name = f"[{status_text}] {file_path}"
         files.append((display_name, file_path))
-
     return files
 
 def check_unpushed_commits():
@@ -109,6 +106,27 @@ def check_unpushed_commits():
 
 def check_and_stage_files(changed_files):
     """【步驟一】引導使用者選擇並暫存 (git add) 檔案"""
+
+    # 💡 智慧升級：只要清單裡面「有包含暫存的檔案」，而且「數量大於零」
+    has_staged = any("暫存" in f[0] or "新增" in f[0] for f in changed_files)
+
+    if has_staged:
+        # 再細分：如果「全部」都是暫存，或者使用者可能想先清空重來
+        print("💡 偵測到有檔案已處於暫存狀態（可能來自之前的 soft reset）。")
+        reset_question = [
+            inquirer.Confirm(
+                'should_reset',
+                message="是否要先重置 (git reset) 暫存區，以便重新乾淨勾選？",
+                default=False  # 設為 False 比較安全，不強迫重置
+            )
+        ]
+        reset_answer = inquirer.prompt(reset_question)
+        if reset_answer and reset_answer['should_reset']:
+            print("🔄 正在重置暫存區...")
+            run_command(["git", "reset"])
+            print("❌ 請重新執行 `gitit` 以載入正確的未暫存清單! 🐙")
+            return False
+
     add_question = [
         inquirer.Checkbox(
             'files_to_add',
@@ -128,9 +146,9 @@ def check_and_stage_files(changed_files):
     for f in selected_files:
         run_command(["git", "add", f])
 
+    print()
     sys.stdout.flush()
     return True
-
 
 def prompt_commit_message():
     """【步驟二】引導使用者填寫 Gitmoji、Scope 與 Commit 訊息"""
@@ -140,6 +158,8 @@ def prompt_commit_message():
     type_questions = [
         inquirer.List('emoji_pair', message="請選擇這次 Commit 的類型", choices=GITMOJIS)
     ]
+    sys.stdout.flush()
+
     type_answers = inquirer.prompt(type_questions)
     sys.stdout.flush()
     if not type_answers:
