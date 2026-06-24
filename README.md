@@ -1,4 +1,4 @@
-# git-it (InaStory-Gitmoji)
+# gitit (Git-it)
 
 一個極具質感、充滿靈魂的互動式 Git 提交輔助工具 desu Wah! 🐙✨
 

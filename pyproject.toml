@@ -1,5 +1,5 @@
 [project]
-name = "git_it"
+name = "gitit"
 version = "0.1.0"
 description = "An interactive, emoji-guided workflow for GitHub submissions"
 readme = "README.md"
@@ -12,7 +12,7 @@ dependencies = [
 package = true
 
 [project.scripts]
-gitit = "git_it.main:main"
+gitit = "gitit.main:main"
 
 [build-system]
 requires = ["hatchling"]
