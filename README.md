@@ -35,14 +35,28 @@
 
 本專案基於新一代超高速 Python 套件管理器 uv 進行管理與全域工具安裝。
 
-### 1. 生產環境安裝 (全域直接使用)
+### 1. 專案複製與環境初始化
+請依序執行以下指令，將專案下載至本地並完成 `uv` 虛擬環境與套件依賴的同步：
+
+```bash
+# 1. 複製專案倉庫（請記得將「你的用戶名」替換為實際的 GitHub 帳號）
+git clone [https://github.com/你的用戶名/git-it.git](https://github.com/你的用戶名/git-it.git)
+
+# 2. 進入專案目錄
+cd git-it
+
+# 3. 建立虛擬環境並自動同步 pyproject.toml 所需的相依套件 (如 inquirer)
+uv sync
+```
+
+### 2. 生產環境安裝 (全域直接使用)
 如果你只是想直接在全域環境使用這款好用的工具，請在專案根目錄下執行：
 
 ```bash
 uv tool install . --force
 ```
 
-### 2. 開發者模式安裝 (Editable Mode)
+### 3. 開發者模式安裝 (Editable Mode)
 如果你正在對工具進行重構、微調 UI（例如修改 main.py），希望修改後免重新安裝、存檔立刻全域生效測試，請執行：
 
 ```bash
