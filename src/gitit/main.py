@@ -13,18 +13,20 @@ IS_VSCODE = os.environ.get("TERM_PROGRAM") == "vscode"
 RAW_GITMOJIS = [
     ("✨ feat:       新增功能 / 注入新欄位或新模組", "✨ feat"),
     ("🐛 fix:        修正 Bug / 排查解決程式錯誤", "🐛 fix"),
-    ("🛡️ security:    強化呈送前終極防護盾 / 安全性更新", "🛡️ security"),
-    ("📝 docs:       修改 README、註解或說明文件", "📝 docs"),
-    ("🐙 ci:         本地打包、uv 設定、GitHub Actions 整合", "🐙 ci"),
-    ("🎨 style:      調整程式碼格式、排版、提示泡泡視覺 (不影響代碼邏輯)", "🎨 style"),
-    ("🚀 deploy:     準備發布新版本 / 編譯 EXE 執行檔", "🚀 deploy"),
-    ("⚡ perf:       效能優化 / 提升自動化腳本執行速度", "⚡ perf"),
     ("♻️ refactor:   程式碼重構 (不是修改 Bug 也不是新增功能)", "♻️ refactor"),
+    ("📝 docs:       修改 README、註解或說明文件", "📝 docs"),
+    ("🎨 style:      調整程式碼格式、排版、提示泡泡視覺 (不影響代碼邏輯)", "🎨 style"),
+    ("⚡ perf:       效能優化 / 提升自動化腳本執行速度", "⚡ perf"),
+    ("🔧 config:     修改設定檔 (如 pyproject.toml / cliff.toml)", "🔧 config"),
+    ("⚙️ chore:      日常維護 / 調整 .gitignore、調整本機開發腳本", "⚙️ chore"),
+    ("🐙 ci:         本地打包、uv 設定、GitHub Actions 整合", "🐙 ci"),
+    ("🚀 deploy:     準備發布新版本 / 編譯 EXE 執行檔", "🚀 deploy"),
     ("🔥 remove:     刪除不再使用的舊程式碼、檔案或功能", "🔥 remove"),
     ("➕ add_dep:    新增第三方套件依賴 (例如 uv add xxx)", "➕ add_dep"),
     ("➖ rm_dep:     移除第三方套件依賴 (例如 uv remove xxx)", "➖ rm_dep"),
-    ("🔧 config:     修改設定檔 (如 pyproject.toml / .gitignore)", "🔧 config"),
-    ("🎉 chore:      初始化專案 / 建立首個專案起點 Commit", "🎉 chore"),
+    ("🛡️ security:   強化呈送前終極防護盾 / 安全性更新", "🛡️ security"),
+    ("◀️ revert:     版本回滾 / 撤銷先前的 Commit 提交紀錄", "◀️ revert"),
+    ("🎉 init:       初始化專案 / 建立首個專案起點 Commit", "🎉 init"),
 ]
 
 GITMOJIS = []
