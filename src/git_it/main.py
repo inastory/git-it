@@ -24,6 +24,7 @@ RAW_GITMOJIS = [
     ("➕ add_dep:    新增第三方套件依賴 (例如 uv add xxx)", "➕ add_dep"),
     ("➖ rm_dep:     移除第三方套件依賴 (例如 uv remove xxx)", "➖ rm_dep"),
     ("🔧 config:     修改設定檔 (如 pyproject.toml / .gitignore)", "🔧 config"),
+    ("🎉 chore:      初始化專案 / 建立首個專案起點 Commit", "🎉 chore"),
 ]
 
 GITMOJIS = []
@@ -100,6 +101,22 @@ def check_unpushed_commits():
     except Exception:
         return []
 
+def is_first_commit():
+    """智慧檢查：確保本地與遠端 GitHub 皆完全沒有任何提交歷史"""
+    try:
+        # 1. 檢查本地是否有任何 commit
+        # 如果是一個完全沒 commit 過的乾淨倉庫，這個指令會直接回傳錯誤（因為沒有 HEAD）
+        run_command(["git", "rev-parse", "--verify", "HEAD"])
+
+        # 2. 如果能抓到 HEAD，代表本地已經有 commit 了，絕對不是第一次提交
+        return False
+    except SystemExit:
+        # 💡 捕捉 run_command 內部的 sys.exit(1)
+        # 當 git rev-parse 失敗時，代表連 HEAD 都沒有，這才是真正的全新專案！
+        return True
+    except Exception:
+        return True
+
 # -------------------------------------------------------------
 # 🧩 步驟積木 (Step Functions)
 # -------------------------------------------------------------
@@ -154,9 +171,17 @@ def prompt_commit_message():
     """【步驟二】引導使用者填寫 Gitmoji、Scope 與 Commit 訊息"""
     sys.stdout.flush()
 
+    filtered_choices = GITMOJIS
+
+    # 💡 智慧動態選單：如果是第一次提交，只顯示 init 選項
+    if is_first_commit():
+        # 只過濾出帶有 "🎉 chore" 的那個選項
+        filtered_choices = [item for item in GITMOJIS if "🎉 chore" in item[1]]
+        print("🎉 偵測到這是此專案的首次提交 (First Commit)！已自動為您鎖定初始化選項。")
+
     # 2.1 選擇 Gitmoji 類型
     type_questions = [
-        inquirer.List('emoji_pair', message="請選擇這次 Commit 的類型", choices=GITMOJIS)
+        inquirer.List('emoji_pair', message="請選擇這次 Commit 的類型", choices=filtered_choices)
     ]
     sys.stdout.flush()
 
@@ -168,10 +193,14 @@ def prompt_commit_message():
 
     base_type = type_answers['emoji_pair']
 
-    # 2.2 填寫影響範圍 Scope (可選，按 Enter 直接跳過)
+    # 2.2 填寫影響範圍 Scope (如果是首次提交，預設填好 "init")
+    default_scope = "init" if is_first_commit() else ""
     scope_questions = [
         inquirer.Text(
-            'scope', message="請輸入影響範圍 Scope (例如: core) [按 Enter 跳過]", default="")
+            'scope',
+            message=f"請輸入影響範圍 Scope [目前預設: {default_scope if default_scope else '無'}]",
+            default=default_scope
+        )
     ]
     scope_answers = inquirer.prompt(scope_questions)
     sys.stdout.flush()
@@ -181,9 +210,15 @@ def prompt_commit_message():
 
     user_scope = scope_answers['scope'].strip()
 
-    # 2.3 輸入 Commit 主訊息
+    # 2.3 輸入 Commit 主訊息 (如果是首次提交，預設提示 "first commit")
+    default_msg = "first commit" if is_first_commit() else ""
     msg_questions = [
-        inquirer.Text('message', message="請輸入 Commit 訊息", validate=lambda _, x: len(x.strip()) > 0)
+        inquirer.Text(
+            'message',
+            message="請輸入 Commit 訊息",
+            default=default_msg,
+            validate=lambda _, x: len(x.strip()) > 0
+        )
     ]
     msg_answers = inquirer.prompt(msg_questions)
     sys.stdout.flush()
