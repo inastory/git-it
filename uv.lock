@@ -38,9 +38,9 @@ wheels = [
 ]
 
 [[package]]
-name = "github-submit-tool"
-version = "0.1.0"
-source = { virtual = "." }
+name = "git-it"
+version = "1.0.0"
+source = { editable = "." }
 dependencies = [
     { name = "inquirer" },
 ]
