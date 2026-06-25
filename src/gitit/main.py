@@ -665,6 +665,10 @@ def publish_to_github(repo_name, is_private=True):
                 print("🔗 正在綁定遠端地址 (git remote add origin)...")
                 run_command(["git", "remote", "add", "origin", clone_url])
 
+                # 🎯 關鍵修正：強制將本地當前分支重命名為 'main'，解決 src refspec 找不到的問題
+                print("🌿 正在將本地預設分支切換為 main (git branch -M main)...")
+                subprocess.run(["git", "branch", "-M", "main"], check=True)
+
                 print("🚀 正在執行首次推送 (git push -u origin main)...")
                 # 由於是首次關聯，需要加 -u 參數，這裡使用 subprocess.run 方便使用者直接看到進度條
                 subprocess.run(
@@ -706,6 +710,28 @@ def main():
     changed_files = get_changed_files()
 
     if not changed_files:
+        # 🎯 終極分流 A：工作區乾淨，但「完全沒有綁定遠端 GitHub 地址」
+        if not has_remote_origin():
+            current_dir_name = os.path.basename(os.getcwd())
+            publish_question = [
+                inquirer.List(
+                    'publish_choice',
+                    message="偵測到此新專案尚未發布至雲端，是否要一鍵 Publish 到 GitHub？",
+                    choices=[
+                        (f"🔒 建立 GitHub 私有倉庫 (Private Repo: {current_dir_name})", "private"),
+                        (f"🌐 建立 GitHub 公開倉庫 (Public Repo: {current_dir_name})", "public"),
+                        ("👋 先不用，保留在本機就好 (Skip)", "skip")
+                    ],
+                    default="private"
+                )
+            ]
+            pub_answer = inquirer.prompt(publish_question)
+            if pub_answer and pub_answer['publish_choice'] != "skip":
+                is_priv = pub_answer['publish_choice'] == "private"
+                publish_to_github(repo_name=current_dir_name, is_private=is_priv)
+            return
+
+        # 🎯 智慧分流 B：有 Remote，常規的未推送（Push）檢查
         unpushed = check_unpushed_commits()
         if unpushed:
             handle_push_workflow(unpushed_commits=unpushed)
