@@ -2,12 +2,96 @@ import sys
 import os
 import subprocess
 import inquirer
+import json
+import urllib.request
+import urllib.error
+
+def fetch_github_repos(username):
+    """透過 GitHub API 動態抓取倉庫，並精準識別 Token 是否過期或無效"""
+    token = os.environ.get("GITHUB_TOKEN")
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Gitit-CLI-Tool)',
+        'Accept': 'application/vnd.github.v3+json'
+    }
+
+    if token:
+        print("🔑 偵測到環境變數中的 GITHUB_TOKEN，將啟用私有倉庫讀取權限...")
+        url = "https://api.github.com/user/repos?per_page=100&sort=updated"
+        headers['Authorization'] = f"token {token}"
+    else:
+        print("🌐 未偵測到 Token，將以匿名公開模式讀取...")
+        url = f"https://api.github.com/users/{username}/repos?per_page=100&sort=updated"
+
+    req = urllib.request.Request(url, headers=headers)
+
+    try:
+        print(f"📡 正在從 GitHub 索取專案清單...")
+        with urllib.request.urlopen(req) as response:
+            if response.status == 200:
+                repos_data = json.loads(response.read().decode('utf-8'))
+
+                repo_choices = []
+                for repo in repos_data:
+                    is_private = "🔒 " if repo.get('private') else "📦 "
+                    display = f"{is_private}{repo['name']} - {repo['description'] or '無描述'}"
+                    repo_choices.append(
+                        (display, (repo['name'], repo['clone_url'])))
+
+                return repo_choices
+
+    except urllib.error.HTTPError as e:
+        # 🎯 這裡就是精準識別 Token 過期的關鍵防線！
+        if e.code == 401:
+            print("\n❌ 認證失敗：您的 GITHUB_TOKEN 可能已過期、被撤銷或不正確！")
+            print(
+                "💡 請至 GitHub (Settings -> Developer Settings) 重新產生 Token 並更新您的 .env 檔案。")
+            # 彈性處理：Token 壞掉時，自動降級為「免 Token 匿名模式」重新抓取公開專案
+            if token:
+                print("\n🔄 正在嘗試自動降級為【匿名公開模式】繼續執行...\n")
+                os.environ.pop("GITHUB_TOKEN", None)  # 拔除壞掉的 Token
+                return fetch_github_repos(username)   # 重新呼叫自己
+        elif e.code == 404:
+            print(f"\n❌ 找不到該 GitHub 帳號: '{username}'，請檢查拼字是否正確。")
+        else:
+            print(f"\n❌ GitHub API 回傳錯誤 (HTTP {e.code}): {e.reason}")
+        return []
+
+    except Exception as e:
+        print(f"❌ 無法連線至 GitHub API (請檢查網路連線): {e}")
+        return []
 
 sys.path.insert(0, os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..")))
 
 # 1. 偵測環境
 IS_VSCODE = os.environ.get("TERM_PROGRAM") == "vscode"
+
+def load_env():
+    """載入【目前工作目錄】或【使用者家目錄】下的 .env，若缺少關鍵變數則噴出單行指引"""
+    cwd_env = os.path.join(os.getcwd(), ".env")
+    home_dir = os.path.expanduser("~")
+    home_env = os.path.join(home_dir, ".env")
+
+    # 1. 優先權分流導航
+    target_env = cwd_env if os.path.exists(cwd_env) else (
+        home_env if os.path.exists(home_env) else None)
+
+    # 2. 解析檔案並寫入環境變數
+    if target_env:
+        with open(target_env, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                os.environ[key.strip()] = value.strip().strip('"').strip("'")
+
+    # 3. 🎯 檢查關鍵變數，若遺漏則印出極簡的單行提示 (One-line troubleshooting)
+    missing = [v for v in ["GITHUB_USERNAME", "GITHUB_TOKEN"] if not os.environ.get(v)]
+    if missing:
+        print(
+            f"⚠️ 缺少環境變數 {missing}：請至家目錄建立 '{os.path.join(home_dir, '.env')}' 並寫入 KEY=VALUE 格式。")
 
 # 2. 定義視覺對齊的 Gitmoji 清單
 RAW_GITMOJIS = [
@@ -53,6 +137,14 @@ def run_command(cmd):
             e.stdout.strip() if e.stdout else "未知錯誤")
         print(f"❌ 執行失敗: {error_msg}")
         sys.exit(1)
+
+def is_git_repository():
+    """安全檢查目前目錄是否為 Git 倉庫"""
+    result = subprocess.run(
+        ["git", "rev-parse", "--is-inside-work-tree"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+    return result.returncode == 0
 
 def get_changed_files():
     """向 Git 索取目前所有異動、未追蹤的檔案清單"""
@@ -102,6 +194,7 @@ def check_unpushed_commits():
         return commits
     except Exception:
         return []
+
 
 def is_first_commit():
     """智慧檢查：確保本地與遠端 GitHub 皆完全沒有任何提交歷史"""
@@ -269,7 +362,6 @@ def handle_push_workflow(unpushed_commits=None):
             default="push"
         )
     ]
-
     push_answer = inquirer.prompt(push_question)
 
     if push_answer and push_answer['push_action'] == "push":
@@ -284,16 +376,174 @@ def handle_push_workflow(unpushed_commits=None):
     else:
         print("\n👋 已將 Commit 保留在本地倉庫，記得找時間 git push 喔！🐙 WAH!")
 
+def create_new_uv_project():
+    """【全新功能】引導建立專案：支援 uv 自動建立、無 uv 降級純 git、以及智慧選配 .venv"""
+    sys.stdout.flush()
+
+    # 1. 詢問專案名稱
+    name_question = [
+        inquirer.Text('project_name', message="請輸入新專案的名稱 (例如: my-awesome-app)", validate=lambda _, x: len(x.strip()) > 0)
+    ]
+    name_answer = inquirer.prompt(name_question)
+    if not name_answer:
+        print("👋 已取消操作。")
+        return
+
+    project_name = name_answer['project_name'].strip()
+
+    # 2. 安全檢查：確保目前資料夾下沒有同名專案
+    if os.path.exists(project_name):
+        print(f"⚠️ 警告: 目前路徑下已存在名為「{project_name}」的檔案或資料夾！")
+        return
+
+    print(f"\n🚀 正在建立新專案: {project_name}...")
+    sys.stdout.flush()
+
+    try:
+        # 3. 嘗試使用 uv 初始化專案（此步驟在新版 uv 中會一併自動處理 git init 與 .gitignore）
+        subprocess.run(["uv", "init", project_name], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print(f"✅ 成功透過 uv 初始化專案與 Git 倉庫。")
+
+        # 4. 🎯 既然有 uv，詢問是否要順便建立虛擬環境 .venv？
+        venv_question = [
+            inquirer.Confirm(
+                'create_venv', message="是否順便為此專案建立虛擬環境 (.venv)？", default=True)
+        ]
+        venv_answer = inquirer.prompt(venv_question)
+
+        if venv_answer and venv_answer['create_venv']:
+            print("📦 正在建立虛擬環境 (uv venv)...")
+            sys.stdout.flush()
+            # 在建立好的專案資料夾內執行 uv venv
+            subprocess.run(["uv", "venv"], cwd=project_name, check=True)
+            print("✅ 虛擬環境 .venv 建立成功！")
+
+        # 5. 提示使用者完工與手動 cd 指引
+        print(f"\n🎉 專案 {project_name} 建立成功！")
+        print(
+            f"💡 接下來請手動輸入：\n   👉 cd {project_name}\n   👉 uv run main.py (若有建立 venv)")
+        print("🐙 WAH!")
+
+    except (FileNotFoundError, subprocess.CalledProcessError) as e:
+        # 🎯 核心防呆：捕捉到找不到 uv 或 uv 執行失敗，觸發降級問答！
+        print("\n⚠️ 系統找不到 'uv' 指令或 uv 執行失敗！")
+        sys.stdout.flush()
+
+        fallback_question = [
+            inquirer.Confirm(
+                'fallback_git', message="是否降級改用標準的 'git init' 來為您建立並初始化一個乾淨的 Git 資料夾？", default=True)
+        ]
+        fallback_answer = inquirer.prompt(fallback_question)
+
+        if fallback_answer and fallback_answer['fallback_git']:
+            try:
+                print(f"📁 正在建立基本資料夾: {project_name}/")
+                os.makedirs(project_name, exist_ok=True)
+
+                print("🗂️ 正在初始化本地 Git 倉庫 (git init)...")
+                subprocess.run(["git", "init"], cwd=project_name, check=True)
+
+                print(f"\n🎉 乾淨的 Git 專案 {project_name} 建立成功！")
+                print(f"💡 接下來請手動輸入：\n   👉 cd {project_name}")
+            except Exception as git_err:
+                print(f"❌ 建立失敗，發生預期之外的錯誤: {git_err}")
+        else:
+            print("👋 已取消操作，未建立任何專案。")
+
+def handle_non_repo_workflow():
+    """【新功能 1 升級版】非倉庫環境下，提供 Clone 與 Create 兩大互動流分流"""
+    sys.stdout.flush()
+
+    # 0. 顯示引導大選單
+    action_question = [
+        inquirer.List(
+            'init_action',
+            message="偵測到目前非 Git 倉庫！請選擇您想執行的操作：",
+            choices=[
+                ("📥 複製現有的 GitHub 遠端專案 (Clone)", "clone"),
+                ("✨ 建立全新的 uv Python 專案 (Create New)", "create")
+            ],
+            default="clone"
+        )
+    ]
+    action_answer = inquirer.prompt(action_question)
+    if not action_answer:
+        print("👋 已取消操作。")
+        return
+
+    # 🌟 核心分流邏輯
+    if action_answer['init_action'] == "create":
+        # 走新寫好的 uv 新增專案流
+        create_new_uv_project()
+        return
+
+    # ----- 以下為原本的 Clone 專案流程 -----
+    username = os.environ.get("GITHUB_USERNAME")
+
+    if not username:
+        user_questions = [
+            inquirer.Text('username', message="請輸入 GitHub 使用者帳號", validate=lambda _, x: len(x.strip()) > 0)
+        ]
+        user_answers = inquirer.prompt(user_questions)
+        if not user_answers:
+            print("👋 已取消操作。")
+            return
+        username = user_answers['username'].strip()
+    else:
+        print(f"👤 已從設定自動識別 GitHub 帳號: {username}")
+
+    repo_choices = fetch_github_repos(username)
+    if not repo_choices:
+        print("👋 未找到任何可讀取的倉庫，程式結束。")
+        return
+
+    repo_questions = [
+        inquirer.List('selected_repo', message=f"請選擇要下載的專案？", choices=repo_choices)
+    ]
+    repo_answers = inquirer.prompt(repo_questions)
+    if not repo_answers:
+        print("👋 已取消操作。")
+        return
+
+    repo_name, clone_url = repo_answers['selected_repo']
+
+    print(f"\n📂 正在檢查資料夾是否存在...")
+    if os.path.exists(repo_name):
+        print(f"⚠️ 警告: 目前路徑下已存在名為「{repo_name}」的檔案或資料夾！")
+        print("👋 為避免覆蓋，請先手動變更或移除該資料夾後再試。")
+        return
+
+    print(f"📁 正在建立專案資料夾: {repo_name}/")
+    os.makedirs(repo_name, exist_ok=True)
+
+    print(f"🚀 正在將遠端倉庫下載至該資料夾內...")
+    sys.stdout.flush()
+
+    try:
+        subprocess.run(["git", "clone", clone_url, "."], cwd=repo_name, check=True)
+        print(f"\n🎉 專案 {repo_name} 下載成功！")
+        print(f"💡 您現在可以 cd {repo_name} 開始開發了 desu Wah! 🐙✨")
+    except subprocess.CalledProcessError:
+        print(f"❌ 專案下載失敗，請檢查網路連線或專案權限。")
+
 # -------------------------------------------------------------
 # 🎬 主流程 (Main Orchestrator)
 # -------------------------------------------------------------
 
 def main():
+    load_env()
+
     if sys.platform == "win32" and not IS_VSCODE:
         os.system("chcp 65001 > nul")
 
     print("🐙 [InaStory-Gitmoji] 歡迎使用互動式提交工具 desu Wah! \n")
     sys.stdout.flush()
+
+    # 🚀 檢查目前是否為 Git 倉庫
+    if not is_git_repository():
+        print("🔍 偵測到目前目錄「不是」Git 倉庫...")
+        handle_non_repo_workflow()
+        return
 
     changed_files = get_changed_files()
 
