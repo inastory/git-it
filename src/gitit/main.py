@@ -614,6 +614,71 @@ def handle_non_repo_workflow():
     except subprocess.CalledProcessError:
         print(f"❌ 專案下載失敗，請檢查網路連線或專案權限。")
 
+
+def has_remote_origin():
+    """安全檢查目前倉庫是否已經綁定名為 'origin' 的遠端倉庫"""
+    try:
+        # 執行 git remote，如果清單裡有包含 origin，代表已綁定
+        remotes = subprocess.run(
+            ["git", "remote"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+        return "origin" in remotes.stdout.split()
+    except Exception:
+        return False
+
+
+def publish_to_github(repo_name, is_private=True):
+    """自動在 GitHub 上建立全新倉庫，並將本地專案發布（Publish）上去"""
+    token = os.environ.get("GITHUB_TOKEN")
+    if not token:
+        print("⚠️ 未偵測到 GITHUB_TOKEN，無法自動在 GitHub 建立遠端倉庫。")
+        print("💡 請手動至 GitHub 網頁建立，或在 .env 中補上 Token。")
+        return False
+
+    url = "https://api.github.com/user/repos"
+    headers = {
+        'Authorization': f"token {token}",
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'Gitit-CLI-Tool'
+    }
+
+    # 建立倉庫所需的參數
+    data = json.dumps({
+        "name": repo_name,
+        "private": is_private,
+        "description": "Initialized by gitit 🐙"
+    }).encode('utf-8')
+
+    req = urllib.request.Request(
+        url, data=data, headers=headers, method='POST')
+
+    try:
+        print(
+            f"\n📡 正在 GitHub 建立全新 {'🔒 私有' if is_private else '🌐 公開'}倉庫 '{repo_name}'...")
+        with urllib.request.urlopen(req) as response:
+            if response.status == 201:
+                res_data = json.loads(response.read().decode('utf-8'))
+                clone_url = res_data['clone_url']
+                print(f"✅ GitHub 遠端倉庫建立成功！")
+
+                # 🔄 自動綁定遠端並推送
+                print("🔗 正在綁定遠端地址 (git remote add origin)...")
+                run_command(["git", "remote", "add", "origin", clone_url])
+
+                print("🚀 正在執行首次推送 (git push -u origin main)...")
+                # 由於是首次關聯，需要加 -u 參數，這裡使用 subprocess.run 方便使用者直接看到進度條
+                subprocess.run(
+                    ["git", "push", "-u", "origin", "main"], check=True)
+                print("\n🎉 專案已成功 Publish 到 GitHub desu Wah! 🐙✨")
+                return True
+    except urllib.error.HTTPError as e:
+        print(f"❌ Publish 失敗 (HTTP {e.code}): {e.reason}")
+        return False
+    except Exception as e:
+        print(f"❌ 發布過程發生預期之外的錯誤: {e}")
+        return False
+
+
 # -------------------------------------------------------------
 # 🎬 主流程 (Main Orchestrator)
 # -------------------------------------------------------------
@@ -634,6 +699,10 @@ def main():
         handle_non_repo_workflow()
         return
 
+    # 🎯 核心防線：先記錄此時此刻是不是「首次提交」
+    # （必須在 execute_commit 之前執行，否則 commit 完它就變成非首次了）
+    is_initial_run = is_first_commit()
+
     changed_files = get_changed_files()
 
     if not changed_files:
@@ -651,7 +720,34 @@ def main():
     if not commit_info:
         return
 
+    # 1. 執行本地 Commit
     execute_commit(commit_info)
+
+    # 2. 🎯 智慧 Publish 分流導航
+    # 如果這是新專案的第一筆 Commit，且系統偵測到它「完全沒有綁定遠端 GitHub 地址」
+    if is_initial_run and not has_remote_origin():
+        current_dir_name = os.path.basename(os.getcwd())
+
+        publish_question = [
+            inquirer.List(
+                'publish_choice',
+                message="偵測到此新專案尚未發布至雲端，是否要一鍵 Publish 到 GitHub？",
+                choices=[
+                    (f"🔒 建立 GitHub 私有倉庫 (Private Repo: {current_dir_name})", "private"),
+                    (f"🌐 建立 GitHub 公開倉庫 (Public Repo: {current_dir_name})", "public"),
+                    ("👋 先不用，保留在本機就好 (Skip)", "skip")
+                ],
+                default="private"
+            )
+        ]
+
+        pub_answer = inquirer.prompt(publish_question)
+        if pub_answer and pub_answer['publish_choice'] != "skip":
+            is_priv = pub_answer['publish_choice'] == "private"
+            publish_to_github(repo_name=current_dir_name, is_private=is_priv)
+            return  # 發布函式內已經包含首次 push，功德圓滿直接結束
+
+    # 3. 正常走原本的 Push 流程（非首次提交，或已經有 Remote 目的地時）
     handle_push_workflow()
 
 
