@@ -297,7 +297,7 @@ def prompt_commit_message():
     # 💡 智慧動態選單：如果是第一次提交，只顯示 init 選項
     if is_first_commit():
         # 只過濾出帶有 "🎉 chore" 的那個選項
-        filtered_choices = [item for item in GITMOJIS if "🎉 chore" in item[1]]
+        filtered_choices = [item for item in GITMOJIS if "🎉 init" in item[1]]
         print("🎉 偵測到這是此專案的首次提交 (First Commit)！已自動為您鎖定初始化選項。")
 
     # 2.1 選擇 Gitmoji 類型
