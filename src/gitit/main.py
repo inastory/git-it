@@ -6,6 +6,7 @@ import json
 import urllib.request
 import urllib.error
 
+
 def fetch_github_repos(username):
     """透過 GitHub API 動態抓取倉庫，並精準識別 Token 是否過期或無效"""
     token = os.environ.get("GITHUB_TOKEN")
@@ -61,11 +62,13 @@ def fetch_github_repos(username):
         print(f"❌ 無法連線至 GitHub API (請檢查網路連線): {e}")
         return []
 
+
 sys.path.insert(0, os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..")))
 
 # 1. 偵測環境
 IS_VSCODE = os.environ.get("TERM_PROGRAM") == "vscode"
+
 
 def load_env():
     """載入【目前工作目錄】或【使用者家目錄】下的 .env，若缺少關鍵變數則噴出單行指引"""
@@ -88,10 +91,12 @@ def load_env():
                 os.environ[key.strip()] = value.strip().strip('"').strip("'")
 
     # 3. 🎯 檢查關鍵變數，若遺漏則印出極簡的單行提示 (One-line troubleshooting)
-    missing = [v for v in ["GITHUB_USERNAME", "GITHUB_TOKEN"] if not os.environ.get(v)]
+    missing = [v for v in ["GITHUB_USERNAME",
+                           "GITHUB_TOKEN"] if not os.environ.get(v)]
     if missing:
         print(
             f"⚠️ 缺少環境變數 {missing}：請至家目錄建立 '{os.path.join(home_dir, '.env')}' 並寫入 KEY=VALUE 格式。")
+
 
 # 2. 定義視覺對齊的 Gitmoji 清單
 RAW_GITMOJIS = [
@@ -124,6 +129,7 @@ for display_text, commit_type in RAW_GITMOJIS:
                 "♻️ refactor:", "♻️  refactor:")
     GITMOJIS.append((display_text, commit_type))
 
+
 def run_command(cmd):
     """執行系統指令並回傳結果 (支援 UTF-8 保險)"""
     try:
@@ -138,6 +144,7 @@ def run_command(cmd):
         print(f"❌ 執行失敗: {error_msg}")
         sys.exit(1)
 
+
 def is_git_repository():
     """安全檢查目前目錄是否為 Git 倉庫"""
     result = subprocess.run(
@@ -145,6 +152,7 @@ def is_git_repository():
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
     return result.returncode == 0
+
 
 def get_changed_files():
     """向 Git 索取目前所有異動、未追蹤的檔案清單"""
@@ -175,6 +183,7 @@ def get_changed_files():
         files.append((display_name, file_path))
     return files
 
+
 def check_unpushed_commits():
     """檢查目前分支是否有尚未推送到遠端（GitHub）的本地提交"""
     try:
@@ -201,10 +210,12 @@ def check_unpushed_commits():
         if not unpushed_output or not unpushed_output.strip():
             return []
 
-        commits = [line.strip() for line in unpushed_output.split("\n") if line.strip()]
+        commits = [line.strip()
+                   for line in unpushed_output.split("\n") if line.strip()]
         return commits
     except Exception:
         return []
+
 
 def is_first_commit():
     """智慧檢查：確保本地與遠端 GitHub 皆完全沒有任何提交歷史（修正版）"""
@@ -217,16 +228,18 @@ def is_first_commit():
             stderr=subprocess.PIPE,
             text=True
         )
-        
+
         # 如果 returncode 不是 0，代表沒有 HEAD，也就是真正的全新空專案（First Commit）
         return res.returncode != 0
-        
+
     except Exception:
         return True
+
 
 # -------------------------------------------------------------
 # 🧩 步驟積木 (Step Functions)
 # -------------------------------------------------------------
+
 
 def check_and_stage_files(changed_files):
     """【步驟一】引導使用者選擇並暫存 (git add) 檔案"""
@@ -274,6 +287,7 @@ def check_and_stage_files(changed_files):
     sys.stdout.flush()
     return True
 
+
 def prompt_commit_message():
     """【步驟二】引導使用者填寫 Gitmoji、Scope 與 Commit 訊息"""
     sys.stdout.flush()
@@ -288,7 +302,8 @@ def prompt_commit_message():
 
     # 2.1 選擇 Gitmoji 類型
     type_questions = [
-        inquirer.List('emoji_pair', message="請選擇這次 Commit 的類型", choices=filtered_choices)
+        inquirer.List('emoji_pair', message="請選擇這次 Commit 的類型",
+                      choices=filtered_choices)
     ]
     sys.stdout.flush()
 
@@ -343,6 +358,7 @@ def prompt_commit_message():
 
     return {"final_msg": final_commit_msg}
 
+
 def execute_commit(commit_info):
     """【步驟三】組合訊息並真正執行本地 Commit"""
     final_commit_msg = commit_info['final_msg']
@@ -353,6 +369,7 @@ def execute_commit(commit_info):
     run_command(["git", "commit", "-m", final_commit_msg])
     print("🎉 本地 Commit 成功完成！\n")
     sys.stdout.flush()
+
 
 def handle_push_failure(error_msg, current_branch):
     """助手函式：專門應對 push 失敗後的引導與 git pull 處理 (極致安全版)"""
@@ -393,6 +410,7 @@ def handle_push_failure(error_msg, current_branch):
             print("👋 已取消，請記得手動處理衝突後再重新 push 喔！")
     else:
         print(f"\n❌ Push 執行失敗，原因：\n{error_msg.strip()}")
+
 
 def handle_push_workflow(unpushed_commits=None):
     """【步驟四】處理互動式推送流程"""
@@ -439,13 +457,15 @@ def handle_push_workflow(unpushed_commits=None):
         # 🎯 失敗時，把苦工丟給專門的助手函式處理
         handle_push_failure(push_res.stderr or "", current_branch)
 
+
 def create_new_uv_project():
     """【全新功能】引導建立專案：支援 uv 自動建立、無 uv 降級純 git、以及智慧選配 .venv"""
     sys.stdout.flush()
 
     # 1. 詢問專案名稱
     name_question = [
-        inquirer.Text('project_name', message="請輸入新專案的名稱 (例如: my-awesome-app)", validate=lambda _, x: len(x.strip()) > 0)
+        inquirer.Text('project_name', message="請輸入新專案的名稱 (例如: my-awesome-app)",
+                      validate=lambda _, x: len(x.strip()) > 0)
     ]
     name_answer = inquirer.prompt(name_question)
     if not name_answer:
@@ -464,7 +484,8 @@ def create_new_uv_project():
 
     try:
         # 3. 嘗試使用 uv 初始化專案（此步驟在新版 uv 中會一併自動處理 git init 與 .gitignore）
-        subprocess.run(["uv", "init", project_name], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(["uv", "init", project_name], check=True,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         print(f"✅ 成功透過 uv 初始化專案與 Git 倉庫。")
 
         # 4. 🎯 既然有 uv，詢問是否要順便建立虛擬環境 .venv？
@@ -513,6 +534,7 @@ def create_new_uv_project():
         else:
             print("👋 已取消操作，未建立任何專案。")
 
+
 def handle_non_repo_workflow():
     """【新功能 1 升級版】非倉庫環境下，提供 Clone 與 Create 兩大互動流分流"""
     sys.stdout.flush()
@@ -545,7 +567,8 @@ def handle_non_repo_workflow():
 
     if not username:
         user_questions = [
-            inquirer.Text('username', message="請輸入 GitHub 使用者帳號", validate=lambda _, x: len(x.strip()) > 0)
+            inquirer.Text('username', message="請輸入 GitHub 使用者帳號",
+                          validate=lambda _, x: len(x.strip()) > 0)
         ]
         user_answers = inquirer.prompt(user_questions)
         if not user_answers:
@@ -561,7 +584,8 @@ def handle_non_repo_workflow():
         return
 
     repo_questions = [
-        inquirer.List('selected_repo', message=f"請選擇要下載的專案？", choices=repo_choices)
+        inquirer.List('selected_repo', message=f"請選擇要下載的專案？",
+                      choices=repo_choices)
     ]
     repo_answers = inquirer.prompt(repo_questions)
     if not repo_answers:
@@ -583,7 +607,8 @@ def handle_non_repo_workflow():
     sys.stdout.flush()
 
     try:
-        subprocess.run(["git", "clone", clone_url, "."], cwd=repo_name, check=True)
+        subprocess.run(["git", "clone", clone_url, "."],
+                       cwd=repo_name, check=True)
         print(f"\n🎉 專案 {repo_name} 下載成功！")
         print(f"💡 您現在可以 cd {repo_name} 開始開發了 desu Wah! 🐙✨")
     except subprocess.CalledProcessError:
@@ -592,6 +617,7 @@ def handle_non_repo_workflow():
 # -------------------------------------------------------------
 # 🎬 主流程 (Main Orchestrator)
 # -------------------------------------------------------------
+
 
 def main():
     load_env()
