@@ -207,18 +207,20 @@ def check_unpushed_commits():
         return []
 
 def is_first_commit():
-    """智慧檢查：確保本地與遠端 GitHub 皆完全沒有任何提交歷史"""
+    """智慧檢查：確保本地與遠端 GitHub 皆完全沒有任何提交歷史（修正版）"""
     try:
-        # 1. 檢查本地是否有任何 commit
-        # 如果是一個完全沒 commit 過的乾淨倉庫，這個指令會直接回傳錯誤（因為沒有 HEAD）
-        run_command(["git", "rev-parse", "--verify", "HEAD"])
-
-        # 2. 如果能抓到 HEAD，代表本地已經有 commit 了，絕對不是第一次提交
-        return False
-    except SystemExit:
-        # 💡 捕捉 run_command 內部的 sys.exit(1)
-        # 當 git rev-parse 失敗時，代表連 HEAD 都沒有，這才是真正的全新專案！
-        return True
+        # 🛡️ 關鍵：直接用最底層的 subprocess.run，不透過 run_command
+        # 這樣就能悄悄地把錯誤吃掉，不會觸發全域的 ❌ 執行失敗 提示
+        res = subprocess.run(
+            ["git", "rev-parse", "--verify", "HEAD"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        # 如果 returncode 不是 0，代表沒有 HEAD，也就是真正的全新空專案（First Commit）
+        return res.returncode != 0
+        
     except Exception:
         return True
 
