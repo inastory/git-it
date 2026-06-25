@@ -184,9 +184,20 @@ def check_unpushed_commits():
             return []
 
         upstream = f"origin/{current_branch}"
-        unpushed_output = run_command(
-            ["git", "log", f"{upstream}..{current_branch}", "--oneline"])
+        # 改用 subprocess.run 並把 stderr 導向 PIPE 隔離，這樣就不會在外面的畫面噴出 fatal 錯誤
+        res = subprocess.run(
+            ["git", "log", f"{upstream}..{current_branch}", "--oneline"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,  # 👈 關鍵防線：把 Git 的抱怨（Needed a single revision）塞回它的嘴裡
+            text=True,
+            encoding="utf-8"
+        )
 
+        # 如果執行失敗（例如全新專案還沒有任何 commit 或沒有遠端分支），直接安全回傳空列表
+        if res.returncode != 0:
+            return []
+
+        unpushed_output = res.stdout
         if not unpushed_output or not unpushed_output.strip():
             return []
 
