@@ -195,7 +195,6 @@ def check_unpushed_commits():
     except Exception:
         return []
 
-
 def is_first_commit():
     """智慧檢查：確保本地與遠端 GitHub 皆完全沒有任何提交歷史"""
     try:
@@ -331,7 +330,6 @@ def prompt_commit_message():
 
     return {"final_msg": final_commit_msg}
 
-
 def execute_commit(commit_info):
     """【步驟三】組合訊息並真正執行本地 Commit"""
     final_commit_msg = commit_info['final_msg']
@@ -342,6 +340,46 @@ def execute_commit(commit_info):
     run_command(["git", "commit", "-m", final_commit_msg])
     print("🎉 本地 Commit 成功完成！\n")
     sys.stdout.flush()
+
+def handle_push_failure(error_msg, current_branch):
+    """助手函式：專門應對 push 失敗後的引導與 git pull 處理 (極致安全版)"""
+    if "rejected" in error_msg or "fetch first" in error_msg:
+        print("\n⚠️ 同步失敗：偵測到遠端 GitHub 有新的提交，本地進度已落後！")
+        sys.stdout.flush()
+
+        pull_question = [
+            inquirer.List(
+                'pull_action',
+                message="是否立刻拉取遠端更新並合併 (git pull)？",
+                choices=[
+                    ("📥 好的，執行 git pull!", "pull"),
+                    ("👋 先不用，我自己處理。", "skip")
+                ],
+                default="pull"
+            )
+        ]
+        pull_answer = inquirer.prompt(pull_question)
+
+        if pull_answer and pull_answer['pull_action'] == "pull":
+            print("\n📡 正在執行 git pull...")
+            sys.stdout.flush()
+
+            # 🛡️ 安全優化：拿掉 --rebase，改用最標準安全的 pull 方式
+            pull_res = subprocess.run(
+                ["git", "pull", "origin", current_branch],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8"
+            )
+
+            if pull_res.returncode == 0:
+                print(f"\n📦 Git 回傳:\n{pull_res.stdout.strip()}")
+                print("🎉 自動合併完成！請重新執行一次工具或手動 git push 即可！")
+            else:
+                print(f"\n❌ Pull 失敗或產生衝突：\n{pull_res.stderr.strip()}")
+                print("💡 安全提示：請手動開啟編輯器（如 VS Code）解決衝突，腳本不會進行任何強制覆蓋。")
+        else:
+            print("👋 已取消，請記得手動處理衝突後再重新 push 喔！")
+    else:
+        print(f"\n❌ Push 執行失敗，原因：\n{error_msg.strip()}")
 
 def handle_push_workflow(unpushed_commits=None):
     """【步驟四】處理互動式推送流程"""
@@ -364,17 +402,29 @@ def handle_push_workflow(unpushed_commits=None):
     ]
     push_answer = inquirer.prompt(push_question)
 
-    if push_answer and push_answer['push_action'] == "push":
-        print("\n📡 正在推送到 GitHub，請稍候...")
-        sys.stdout.flush()
+    if not push_answer or push_answer['push_action'] != "push":
+        print("\n👋 已將 Commit 保留在本地倉庫，記得找時間 git push 喔！🐙 WAH!")
+        return
 
-        push_result = run_command(["git", "push"])
-        if push_result:
-            print(f"\n📦 Git 回傳:\n{push_result}")
+    # 🚀 執行 Push
+    print("\n📡 正在推送到 GitHub，請稍候...")
+    sys.stdout.flush()
 
+    branch_output = run_command(["git", "branch", "--show-current"])
+    current_branch = branch_output.strip()
+
+    push_res = subprocess.run(
+        ["git", "push"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8"
+    )
+
+    if push_res.returncode == 0:
+        if push_res.stdout:
+            print(f"\n📦 Git 回傳:\n{push_res.stdout.strip()}")
         print("\n🚀 雲端同步成功！程式碼已安全送達 GitHub desu Wah! 🐙✨")
     else:
-        print("\n👋 已將 Commit 保留在本地倉庫，記得找時間 git push 喔！🐙 WAH!")
+        # 🎯 失敗時，把苦工丟給專門的助手函式處理
+        handle_push_failure(push_res.stderr or "", current_branch)
 
 def create_new_uv_project():
     """【全新功能】引導建立專案：支援 uv 自動建立、無 uv 降級純 git、以及智慧選配 .venv"""
