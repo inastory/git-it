@@ -9,6 +9,7 @@
 - [ ] 測試在 Linux 與 Mac 環境下的相容性
 - [ ] feat: add src folder and package folder when init (ensure the package folder name is legitimate)
 - [ ] feat: pull and sync for all project
+- [ ] feat: detect and ask for create CI/CD template(uv/requirement.txt).
 
 ## ✅ 已完成 (Done)
 - [x] 重構專案結構，全面統一命名為 `gitit`
